@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.title("🔒 Differential Privacy Student Analytics Dashboard")
+st.title(" Differential Privacy Student Analytics Dashboard")
 st.markdown("---")
 
 
@@ -53,9 +53,9 @@ st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
     **Privacy vs Accuracy Trade-off:**
-    - 🔐 **Low ε** (0.01-0.2): Maximum privacy, high noise
-    - ⚖️ **Medium ε** (0.3-1.0): Balanced privacy & utility
-    - 🎯 **High ε** (1.0+): Better accuracy, weaker privacy
+    -  **Low ε** (0.01-0.2): Maximum privacy, high noise
+    -  **Medium ε** (0.3-1.0): Balanced privacy & utility
+    -  **High ε** (1.0+): Better accuracy, weaker privacy
     """
 )
 
@@ -79,7 +79,7 @@ df = analytics.get_data()
 # SECTION 1: DATASET OVERVIEW
 
 
-st.header("📊 Dataset Overview")
+st.header(" Dataset Overview")
 
 col1, col2, col3, col4 = st.columns(4)
 
@@ -129,7 +129,7 @@ st.markdown("---")
 # SECTION 2: TRUE vs PRIVATE STATISTICS
 
 
-st.header("📈 True vs Differentially Private Statistics")
+st.header("True vs Differentially Private Statistics")
 
 # Run DP queries
 results = analytics.dp_queries(epsilon=epsilon, mechanism=mechanism, equal_split=True)
@@ -186,7 +186,7 @@ st.markdown("---")
 # SECTION 3: ERROR ANALYSIS
 
 
-st.header("📉 Error Analysis")
+st.header(" Error Analysis")
 
 # Run multiple trials
 trial_results = []
@@ -225,7 +225,7 @@ st.markdown("---")
 # SECTION 4: VISUALIZATIONS
 
 
-st.header("📊 Visualizations")
+st.header("Visualizations")
 
 # Visualization 1: Histogram of Final Marks
 st.subheader("Distribution of Final Marks")
@@ -353,7 +353,7 @@ st.markdown("---")
 # SECTION 5: INSIGHTS & EXPLANATIONS
 
 
-st.header("💡 Key Insights")
+st.header(" Key Insights")
 
 col1, col2 = st.columns(2)
 
@@ -398,7 +398,7 @@ with col2:
     st.write(f"**Avg Relative Error:** {avg_rel_error:.2f}%")
     
     if avg_rel_error < 5:
-        st.success("✅ Results are highly accurate!")
+        st.success(" Results are highly accurate!")
     elif avg_rel_error < 15:
         st.info("⚠️ Results are reasonably accurate with some noise.")
     else:
