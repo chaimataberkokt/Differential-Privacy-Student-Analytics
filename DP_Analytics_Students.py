@@ -5,10 +5,27 @@ import pandas as pd
 class DP_Analytics_Students:
     """
     A production-ready differential privacy analytics system for student data.
-    
+
     Computes statistics on student performance while preserving privacy using
     Laplace and Gaussian mechanisms.
+
+    Privacy budget accounting
+    -------------------------
+    When ``equal_split=True`` (the default), the total epsilon supplied to
+    ``dp_queries()`` is divided equally across all ``NUM_QUERIES`` queries
+    **before** being passed to the noise mechanism::
+
+        eps_per_query = epsilon_total / NUM_QUERIES
+
+    All privacy-level assessments in the dashboard are therefore based on
+    ``eps_per_query``, not on ``epsilon_total``.  This is the value that
+    controls the actual noise scale.
     """
+
+    # Number of independent statistics computed by dp_queries().
+    # Changing this constant automatically updates both the budget split
+    # and the eps_per_query value exposed in the result dictionary.
+    NUM_QUERIES: int = 5
     
     def __init__(self, csv_path, pass_threshold=10):
         """
@@ -223,34 +240,59 @@ class DP_Analytics_Students:
     def dp_queries(self, epsilon, mechanism="laplace", equal_split=True):
         """
         Compute all DP statistics in one query.
-        
+
+        When ``equal_split=True`` the total privacy budget is divided evenly
+        across all ``NUM_QUERIES`` queries (sequential composition theorem).
+        The effective per-query epsilon is stored in the returned dictionary
+        under the key ``"eps_per_query"`` so that callers — such as the
+        Streamlit dashboard — can display the value that was *actually* used
+        by the noise mechanism, rather than the potentially misleading total.
+
         Args:
-            epsilon (float): Total privacy budget
-            mechanism (str): "laplace" or "gaussian"
+            epsilon (float): Total privacy budget (ε_total)
+            mechanism (str): ``"laplace"`` for strict ε-DP or
+                             ``"gaussian"`` for approximate (ε, δ)-DP.
             equal_split (bool): If True, split epsilon equally among queries
-            
+                                 using the sequential composition theorem.
+
         Returns:
-            dict: Contains both true and noisy statistics
+            dict: Keys:
+                - ``epsilon``       – total budget supplied by the caller
+                - ``eps_per_query`` – per-query budget actually used for noise
+                - ``num_queries``   – number of queries (= NUM_QUERIES)
+                - ``equal_split``   – whether budget was split
+                - ``mechanism``     – noise mechanism used
+                - ``true_stats``    – exact statistics (no noise)
+                - ``sensitivities`` – sensitivity of each query
+                - ``noisy_stats``   – differentially private statistics
         """
+        # --- Budget allocation -------------------------------------------
+        # Use the class-level constant so there is a single source of truth.
         if equal_split:
-            eps_per_query = epsilon / 5  # 5 queries total
+            
+            eps_per_query = epsilon / self.NUM_QUERIES
         else:
             eps_per_query = epsilon
-        
+
         result = {
             "epsilon": epsilon,
+            # Expose the effective per-query epsilon so the UI can use it
+            # for privacy-level assessments instead of the total budget.
+            "eps_per_query": eps_per_query,
+            "num_queries": self.NUM_QUERIES,
+            "equal_split": equal_split,
             "mechanism": mechanism,
             "true_stats": self.true_stats.copy(),
             "sensitivities": self.sensitivities.copy(),
             "noisy_stats": {
-                "mean_final_mark": self.query_mean_final_mark(eps_per_query, mechanism),
+                "mean_final_mark":   self.query_mean_final_mark(eps_per_query, mechanism),
                 "mean_participation": self.query_mean_participation(eps_per_query, mechanism),
-                "mean_quiz_avg": self.query_mean_quiz_avg(eps_per_query, mechanism),
-                "count": self.query_count(eps_per_query, mechanism),
-                "pass_rate": self.query_pass_rate(eps_per_query, mechanism),
-            }
+                "mean_quiz_avg":     self.query_mean_quiz_avg(eps_per_query, mechanism),
+                "count":             self.query_count(eps_per_query, mechanism),
+                "pass_rate":         self.query_pass_rate(eps_per_query, mechanism),
+            },
         }
-        
+
         return result
     
    

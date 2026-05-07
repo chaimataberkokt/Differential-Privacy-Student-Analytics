@@ -29,10 +29,10 @@ st.sidebar.header("⚙️ Privacy Controls")
 epsilon = st.sidebar.slider(
     "Privacy Budget (ε)",
     min_value=0.01,
-    max_value=5.0,
+    max_value=2.0,
     value=0.5,
     step=0.01,
-    help="Lower ε = stronger privacy but more noise. Higher ε = better accuracy but weaker privacy."
+    help="This is the exact ε applied to every query by the noise mechanism. Lower = stronger privacy, more noise."
 )
 
 mechanism = st.sidebar.selectbox(
@@ -52,10 +52,14 @@ num_trials = st.sidebar.slider(
 st.sidebar.markdown("---")
 st.sidebar.markdown(
     """
-    **Privacy vs Accuracy Trade-off:**
-    -  **Low ε** (0.01-0.2): Maximum privacy, high noise
-    -  **Medium ε** (0.3-1.0): Balanced privacy & utility
-    -  **High ε** (1.0+): Better accuracy, weaker privacy
+    **Privacy vs Accuracy guide:**
+    | ε | Privacy | Noise |
+    |---|---|---|
+    | 0.01 – 0.10 | 🔓 Maximum | Very high |
+    | 0.10 – 0.20 | 🔒 Strong | High |
+    | 0.20 – 0.50 | ⚖️ Balanced | Moderate |
+    | 0.50 – 1.00 | 🎯 Weaker | Low |
+    | 1.00 – 2.00 | ⚠️ Weak | Very low |
     """
 )
 
@@ -131,9 +135,10 @@ st.markdown("---")
 
 st.header("True vs Differentially Private Statistics")
 
-# Run DP queries
-results = analytics.dp_queries(epsilon=epsilon, mechanism=mechanism, equal_split=True)
-true_stats = results["true_stats"]
+# Run DP queries — equal_split=False means epsilon IS the per-query value,
+# exactly what the slider shows. No hidden division.
+results     = analytics.dp_queries(epsilon=epsilon, mechanism=mechanism, equal_split=False)
+true_stats  = results["true_stats"]
 noisy_stats = results["noisy_stats"]
 
 # Create comparison dataframe
@@ -192,7 +197,7 @@ st.header(" Error Analysis")
 trial_results = []
 
 for trial in range(num_trials):
-    trial_res = analytics.dp_queries(epsilon=epsilon, mechanism=mechanism, equal_split=True)
+    trial_res = analytics.dp_queries(epsilon=epsilon, mechanism=mechanism, equal_split=False)
     for key in trial_res["true_stats"].keys():
         true_val = trial_res["true_stats"][key]
         noisy_val = trial_res["noisy_stats"][key]
@@ -302,23 +307,21 @@ st.plotly_chart(fig_error, use_container_width=True)
 # Visualization 4: Privacy-Accuracy Trade-off Curve
 st.subheader("Privacy-Accuracy Trade-off Curve")
 
-epsilons_range = [0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1.0, 1.5, 2.0]
+epsilons_range = [0.01, 0.05, 0.10, 0.20, 0.30, 0.50, 0.80, 1.00, 1.50, 2.00]
 tradeoff_results = []
 
 with st.spinner("Computing trade-off curve..."):
     for eps in epsilons_range:
         trial_errors = []
-        for _ in range(5):  # 5 trials per epsilon
-            res = analytics.dp_queries(epsilon=eps, mechanism=mechanism, equal_split=True)
-            true_val = res["true_stats"]["mean_final_mark"]
+        for _ in range(5):
+            res = analytics.dp_queries(epsilon=eps, mechanism=mechanism, equal_split=False)
+            true_val  = res["true_stats"]["mean_final_mark"]
             noisy_val = res["noisy_stats"]["mean_final_mark"]
             trial_errors.append(abs(true_val - noisy_val))
-        
-        avg_error = np.mean(trial_errors)
         tradeoff_results.append({
-            "epsilon": eps,
-            "avg_error": avg_error,
-            "std_error": np.std(trial_errors)
+            "epsilon":   eps,
+            "avg_error": np.mean(trial_errors),
+            "std_error": np.std(trial_errors),
         })
 
 tradeoff_df = pd.DataFrame(tradeoff_results)
@@ -327,15 +330,11 @@ fig_tradeoff = go.Figure()
 fig_tradeoff.add_trace(go.Scatter(
     x=tradeoff_df["epsilon"],
     y=tradeoff_df["avg_error"],
-    error_y=dict(
-        type='data',
-        array=tradeoff_df["std_error"],
-        visible=True
-    ),
-    mode='lines+markers',
-    name='Mean Absolute Error',
-    marker=dict(size=8, color='rgba(200, 50, 50, 0.8)'),
-    line=dict(color='rgba(200, 50, 50, 0.8)', width=2)
+    error_y=dict(type="data", array=tradeoff_df["std_error"], visible=True),
+    mode="lines+markers",
+    name="Mean Absolute Error",
+    marker=dict(size=8, color="rgba(200, 50, 50, 0.8)"),
+    line=dict(color="rgba(200, 50, 50, 0.8)", width=2),
 ))
 fig_tradeoff.update_layout(
     xaxis_title="Privacy Budget (ε)",
@@ -343,7 +342,7 @@ fig_tradeoff.update_layout(
     title="Privacy-Accuracy Trade-off",
     height=400,
     showlegend=True,
-    hovermode="x unified"
+    hovermode="x unified",
 )
 st.plotly_chart(fig_tradeoff, use_container_width=True)
 
@@ -359,29 +358,29 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🔐 Privacy-Accuracy Trade-off")
-    
-    if epsilon < 0.2:
-        privacy_level = "🔓 **VERY STRONG PRIVACY**"
+
+    if epsilon <= 0.10:
+        privacy_level  = "🔓 **VERY STRONG PRIVACY**"
         accuracy_level = "📉 Very High Noise"
-        explanation = "Epsilon is very small. You get maximum privacy protection, but the results are heavily distorted by noise."
-    elif epsilon < 0.5:
-        privacy_level = "🔒 **STRONG PRIVACY**"
+        explanation = "Maximum privacy protection, but results are heavily distorted by noise."
+    elif epsilon <= 0.20:
+        privacy_level  = "🔒 **STRONG PRIVACY**"
         accuracy_level = "📊 Moderate Noise"
-        explanation = "Epsilon is low. Good privacy with some accuracy loss. Suitable for sensitive applications."
-    elif epsilon < 1.0:
-        privacy_level = "⚖️ **BALANCED**"
-        accuracy_level = "📈 Low Noise"
-        explanation = "Epsilon is moderate. Good balance between privacy and utility. Recommended for most use cases."
-    elif epsilon < 2.0:
-        privacy_level = "🎯 **WEAKER PRIVACY**"
-        accuracy_level = "✅ Very Low Noise"
-        explanation = "Epsilon is high. Results are highly accurate but privacy is weaker."
+        explanation = "Good privacy with some accuracy loss. Suitable for highly sensitive data."
+    elif epsilon <= 0.50:
+        privacy_level  = "⚖️ **BALANCED**"
+        accuracy_level = "📈 Low-Moderate Noise"
+        explanation = "Good balance between privacy and utility. Recommended for most use cases."
+    elif epsilon <= 1.00:
+        privacy_level  = "🎯 **WEAKER PRIVACY**"
+        accuracy_level = "✅ Low Noise"
+        explanation = "Highly accurate but privacy guarantees are weaker."
     else:
-        privacy_level = "⚠️ **WEAK PRIVACY**"
+        privacy_level  = "⚠️ **WEAK PRIVACY**"
         accuracy_level = "🎯 Minimal Noise"
-        explanation = "Epsilon is very high. Near-true results but limited privacy protection."
-    
-    st.write(f"**Current Setting: ε = {epsilon}**")
+        explanation = "Near-true results with very limited privacy protection."
+
+    st.write(f"ε = **{epsilon}**")
     st.write(f"**Privacy Level:** {privacy_level}")
     st.write(f"**Accuracy:** {accuracy_level}")
     st.write(f"**Interpretation:** {explanation}")
@@ -411,38 +410,37 @@ st.subheader("🎓 How Differential Privacy Works")
 with st.expander("Learn More", expanded=False):
     st.markdown("""
     ### What is Differential Privacy?
-    
-    Differential Privacy (DP) is a mathematical framework that protects individual data 
+
+    Differential Privacy (DP) is a mathematical framework that protects individual data
     while allowing useful aggregate statistics.
-    
-    **Key Idea:** The output should not change significantly whether or not a single 
+
+    **Key Idea:** The output should not change significantly whether or not a single
     student's data is included.
-    
+
     ### Mechanisms Used
-    
+
     **1. Laplace Mechanism (ε-DP):**
-    - Adds noise from Laplace distribution: Noise ~ Laplace(0, Δ/ε)
+    - Adds noise: Noise ∼ Laplace(0, Δ / ε)
     - Provides strict privacy guarantees
-    - Best for simple queries like counts
-    
-    **2. Gaussian Mechanism ((ε,δ)-DP):**
-    - Adds noise from Normal distribution: Noise ~ N(0, σ²)
-    - Where σ = √(2·ln(1.25/δ)) · Δ/ε
-    - Smoother noise, good for averages
-    
+    - Best for counts and simple aggregates
+
+    **2. Gaussian Mechanism ((ε, δ)-DP):**
+    - Adds noise: Noise ∼ N(0, σ²)
+    - Where σ = √(2·ln(1.25/δ)) · Δ / ε
+    - Smoother noise distribution, good for averages
+
     ### Sensitivity
-    
+
     Sensitivity measures how much a query can change when one record is added/removed:
     - **Count Sensitivity:** Δ = 1
-    - **Mean Sensitivity:** Δ = (max - min) / n
+    - **Mean Sensitivity:** Δ = (max − min) / n
     - **Pass Rate Sensitivity:** Δ = 1 / n
-    
+
     ### Privacy Budget (ε)
-    
+
     - **Small ε:** Strong privacy, high noise
     - **Large ε:** Weak privacy, low noise
-    - Multiple queries share the same budget
-    
+    - The slider value is the exact ε applied to every query
     """)
 
 st.markdown("---")
