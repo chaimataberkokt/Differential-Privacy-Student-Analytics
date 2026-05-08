@@ -16,7 +16,7 @@ A comprehensive educational project demonstrating differential privacy technique
 - [Technical Details](#technical-details)
 - [Results & Visualizations](#results--visualizations)
 - [Contributing ](#contributing)
-- [Requirements] (#Requirements)
+- [Requirements](#Requirements)
 ---
 
 ## Overview
