@@ -63,6 +63,33 @@ st.sidebar.markdown(
     """
 )
 
+st.sidebar.markdown("---")
+st.sidebar.header("🔍 Optimal ε Finder")
+
+find_optimal = st.sidebar.checkbox(
+    "Find optimal ε for this data",
+    value=False,
+    help="Runs a two-phase grid search to find the elbow point — the ε where increasing it further gives diminishing accuracy gains."
+)
+
+optimize_metric = st.sidebar.selectbox(
+    "Optimise for",
+    options=["mean_final_mark", "mean_participation", "mean_quiz_avg", "pass_rate"],
+    format_func=lambda x: x.replace("_", " ").title(),
+    help="Which statistic to use when searching for the optimal ε.",
+    disabled=not find_optimal,
+)
+
+target_error = st.sidebar.slider(
+    "Target relative error (%)",
+    min_value=1.0,
+    max_value=20.0,
+    value=5.0,
+    step=0.5,
+    help="The search will also report the smallest ε that achieves this error threshold.",
+    disabled=not find_optimal,
+)
+
 
 # LOAD AND INITIALIZE
 
@@ -349,7 +376,128 @@ st.plotly_chart(fig_tradeoff, use_container_width=True)
 st.markdown("---")
 
 
-# SECTION 5: INSIGHTS & EXPLANATIONS
+# SECTION 5: OPTIMAL EPSILON FINDER
+
+
+if find_optimal:
+    st.header("🔍 Optimal ε Finder")
+
+    with st.spinner("Running two-phase grid search (this may take a few seconds)..."):
+        opt_result = analytics.find_optimal_epsilon(
+            mechanism=mechanism,
+            metric=optimize_metric,
+            target_relative_error=target_error,
+            trials_per_eps=20,
+        )
+
+    opt_eps = opt_result["optimal_epsilon"]
+    thr_eps = opt_result["threshold_epsilon"]
+    sweep   = opt_result["sweep_data"]
+
+    # --- Result metrics ---
+    st.subheader("Results")
+    rcol1, rcol2, rcol3 = st.columns(3)
+
+    with rcol1:
+        st.metric(
+            label="🎯 Optimal ε (Elbow)",
+            value=f"{opt_eps:.4f}",
+            help="The elbow point where further increases in ε give diminishing accuracy gains.",
+        )
+    with rcol2:
+        if thr_eps is not None:
+            st.metric(
+                label=f"✅ ε for ≤{target_error}% error",
+                value=f"{thr_eps:.4f}",
+                help=f"Smallest ε that achieves ≤{target_error}% average relative error.",
+            )
+        else:
+            st.metric(
+                label=f"❌ ε for ≤{target_error}% error",
+                value="Not achievable",
+                help="No tested ε achieved the target. Try raising the target or the slider max.",
+            )
+    with rcol3:
+        # find the error at optimal eps
+        opt_err = min(sweep, key=lambda d: abs(d["epsilon"] - opt_eps))["avg_relative_error"]
+        st.metric(
+            label="📊 Error at optimal ε",
+            value=f"{opt_err:.2f}%",
+            help="Average relative error at the recommended elbow epsilon.",
+        )
+
+    # --- Sweep chart ---
+    st.subheader("Search Curve")
+
+    sweep_df = pd.DataFrame(sweep)
+
+    fig_opt = go.Figure()
+
+    # error curve
+    fig_opt.add_trace(go.Scatter(
+        x=sweep_df["epsilon"],
+        y=sweep_df["avg_relative_error"],
+        mode="lines+markers",
+        name="Avg Relative Error (%)",
+        marker=dict(size=5, color="rgba(0, 120, 200, 0.8)"),
+        line=dict(color="rgba(0, 120, 200, 0.8)", width=2),
+    ))
+
+    # elbow marker
+    fig_opt.add_trace(go.Scatter(
+        x=[opt_eps],
+        y=[opt_err],
+        mode="markers+text",
+        name=f"Elbow (ε={opt_eps:.4f})",
+        marker=dict(size=14, color="red", symbol="star"),
+        text=[f"ε={opt_eps:.4f}"],
+        textposition="top center",
+    ))
+
+    # target threshold line
+    fig_opt.add_hline(
+        y=target_error,
+        line_dash="dash",
+        line_color="green",
+        annotation_text=f"Target: {target_error}%",
+        annotation_position="top left",
+    )
+
+    fig_opt.update_layout(
+        xaxis_title="Privacy Budget (ε)",
+        yaxis_title="Avg Relative Error (%)",
+        title=f"Optimal ε Search — {optimize_metric.replace('_', ' ').title()}",
+        height=450,
+        showlegend=True,
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig_opt, use_container_width=True)
+
+    # --- Explanation ---
+    with st.expander("How does this work?", expanded=False):
+        st.markdown("""
+        **Two-phase grid search with elbow detection:**
+
+        1. **Phase 1 (Coarse sweep):** 16 epsilon values from 0.01 to 2.0 are tested,
+           each with 20 independent trials. The average relative error is computed for each.
+
+        2. **Elbow detection:** The error curve is normalised and the point with maximum
+           perpendicular distance from the chord (first → last point) is identified.
+           This is the "elbow" — the ε where diminishing returns begin.
+
+        3. **Phase 2 (Fine sweep):** 20 additional epsilon values are tested in a narrow
+           band around the coarse elbow, and the elbow is re-detected on the combined data.
+
+        4. **Threshold ε:** The smallest ε that achieves the target relative error is also
+           reported as an alternative recommendation.
+
+        **Why not an ML model?** The relationship between ε and error is mathematically
+        well-defined (noise scale = sensitivity / ε). A grid search is exact, interpretable,
+        and requires no training data.
+        """)
+
+st.markdown("---")
+
 
 
 st.header(" Key Insights")

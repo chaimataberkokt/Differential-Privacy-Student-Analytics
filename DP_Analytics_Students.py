@@ -374,6 +374,141 @@ class DP_Analytics_Students:
         return self.df.copy()
 
 
+    # OPTIMAL EPSILON SEARCH
+
+
+    def find_optimal_epsilon(
+        self,
+        mechanism="laplace",
+        metric="mean_final_mark",
+        target_relative_error=5.0,
+        trials_per_eps=20,
+        coarse_range=None,
+        fine_steps=20,
+    ):
+        """
+        Two-phase grid search to find the optimal epsilon.
+
+        Phase 1 (Coarse): Sweep a wide range of epsilon values and compute
+        average relative error across multiple trials for each.
+
+        Phase 2 (Fine): Narrow the search around the elbow region found in
+        Phase 1 and refine with smaller steps.
+
+        The "optimal" epsilon is defined as the elbow point — the value where
+        further increases in epsilon yield diminishing accuracy gains.  This is
+        detected geometrically: the point with maximum perpendicular distance
+        from the chord connecting the first and last points of the normalised
+        error curve.
+
+        Args:
+            mechanism (str): ``"laplace"`` or ``"gaussian"``
+            metric (str): Which statistic to optimise for
+            target_relative_error (float): Desired relative error threshold (%)
+            trials_per_eps (int): Number of trials per epsilon candidate
+            coarse_range (list|None): Custom coarse epsilon grid; if None, uses
+                a sensible default ``[0.01 .. 2.0]``
+            fine_steps (int): Number of steps in the fine-grained phase
+
+        Returns:
+            dict:
+                - ``optimal_epsilon``      – recommended epsilon (elbow point)
+                - ``threshold_epsilon``     – smallest epsilon achieving the
+                  target relative error (or None if not achievable)
+                - ``target_relative_error`` – the target that was requested
+                - ``sweep_data``           – list of dicts with ``epsilon``,
+                  ``avg_relative_error``, ``avg_absolute_error``,
+                  ``std_relative_error`` for every tested value
+                - ``phase``                – ``"coarse+fine"``
+        """
+        if coarse_range is None:
+            coarse_range = [
+                0.01, 0.02, 0.05, 0.08,
+                0.10, 0.15, 0.20, 0.30,
+                0.40, 0.50, 0.60, 0.80,
+                1.00, 1.25, 1.50, 2.00,
+            ]
+
+        # ---------- helper: evaluate one epsilon value ----------
+        def _evaluate(eps):
+            rel_errors, abs_errors = [], []
+            for _ in range(trials_per_eps):
+                res = self.dp_queries(epsilon=eps, mechanism=mechanism,
+                                      equal_split=False)
+                true_val  = res["true_stats"][metric]
+                noisy_val = res["noisy_stats"][metric]
+                ae = abs(true_val - noisy_val)
+                re = (ae / abs(true_val) * 100) if true_val != 0 else 0
+                abs_errors.append(ae)
+                rel_errors.append(re)
+            return {
+                "epsilon":            eps,
+                "avg_relative_error": float(np.mean(rel_errors)),
+                "std_relative_error": float(np.std(rel_errors)),
+                "avg_absolute_error": float(np.mean(abs_errors)),
+            }
+
+        # ---------- Phase 1: coarse sweep ----------
+        sweep = [_evaluate(eps) for eps in coarse_range]
+
+        # ---------- Elbow detection (max distance from chord) ----------
+        def _find_elbow(data):
+            """Return the index of the elbow point."""
+            eps_vals = np.array([d["epsilon"] for d in data])
+            err_vals = np.array([d["avg_relative_error"] for d in data])
+
+            # normalise to [0,1]
+            eps_n = (eps_vals - eps_vals.min()) / (eps_vals.max() - eps_vals.min() + 1e-12)
+            err_n = (err_vals - err_vals.min()) / (err_vals.max() - err_vals.min() + 1e-12)
+
+            # chord from first to last point
+            p1 = np.array([eps_n[0], err_n[0]])
+            p2 = np.array([eps_n[-1], err_n[-1]])
+            line_vec = p2 - p1
+            line_len = np.linalg.norm(line_vec)
+            if line_len < 1e-12:
+                return len(data) // 2
+
+            # perpendicular distance of each point from the chord
+            distances = []
+            for i in range(len(data)):
+                pt = np.array([eps_n[i], err_n[i]])
+                dist = abs(np.cross(line_vec, p1 - pt)) / line_len
+                distances.append(dist)
+
+            return int(np.argmax(distances))
+
+        elbow_idx = _find_elbow(sweep)
+        elbow_eps = sweep[elbow_idx]["epsilon"]
+
+        # ---------- Phase 2: fine sweep around elbow ----------
+        low  = sweep[max(0, elbow_idx - 1)]["epsilon"]
+        high = sweep[min(len(sweep) - 1, elbow_idx + 1)]["epsilon"]
+        fine_range = np.linspace(low, high, fine_steps).tolist()
+
+        fine_sweep = [_evaluate(eps) for eps in fine_range]
+        all_data   = sorted(sweep + fine_sweep, key=lambda d: d["epsilon"])
+
+        # re-detect elbow on combined data
+        elbow_idx_final = _find_elbow(all_data)
+        optimal_eps = all_data[elbow_idx_final]["epsilon"]
+
+        # ---------- Threshold epsilon ----------
+        threshold_eps = None
+        for d in all_data:
+            if d["avg_relative_error"] <= target_relative_error:
+                threshold_eps = d["epsilon"]
+                break
+
+        return {
+            "optimal_epsilon":      round(optimal_eps, 4),
+            "threshold_epsilon":    round(threshold_eps, 4) if threshold_eps else None,
+            "target_relative_error": target_relative_error,
+            "sweep_data":           all_data,
+            "phase":                "coarse+fine",
+        }
+
+
 class PrivacyBudget:
     """Manages privacy budget allocation across multiple queries."""
     
