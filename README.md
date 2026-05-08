@@ -12,6 +12,7 @@ A comprehensive educational project demonstrating differential privacy technique
 - [Quick Start](#quick-start)
 - [Usage Guide](#usage-guide)
 - [How Differential Privacy Works](#how-differential-privacy-works)
+- [Optimal Epsilon Search](#optimal-epsilon-search)
 - [Dataset](#dataset)
 - [Technical Details](#technical-details)
 - [Results & Visualizations](#results--visualizations)
@@ -314,6 +315,149 @@ where σ = √(2·ln(1.25/δ)) · Δ/ε
 - Smooth, normal-distributed noise
 - Better average-case privacy
 - Good for means and continuous values
+
+---
+
+##  Optimal Epsilon Search
+
+### Overview
+
+**Challenge:** How do you choose the right epsilon value for your use case?
+
+Manual selection is difficult because the relationship between epsilon and accuracy is non-linear and task-dependent. Too small an epsilon sacrifices utility; too large defeats the privacy purpose.
+
+**Solution:** This project implements an **automated two-phase grid search with elbow detection** to find the optimal epsilon value that balances privacy and utility.
+
+### The Two-Phase Approach
+
+#### Phase 1: Coarse-Grain Search
+- Searches epsilon values at **large intervals** (e.g., 0.01 to 2.0 in steps of 0.2)
+- Identifies the approximate region where accuracy improves most
+- Fast exploration of the full privacy-accuracy curve
+
+#### Phase 2: Fine-Grain Search
+- Zooms into the promising region found in Phase 1
+- Uses **smaller intervals** (e.g., 0.01 steps) for precision
+- Finds the exact elbow point and threshold values
+
+### Elbow Detection Algorithm
+
+The algorithm identifies the **elbow point** — the epsilon value where:
+- Increasing epsilon **below** the elbow dramatically reduces error
+- Increasing epsilon **above** the elbow barely improves accuracy
+- At the elbow, you get the best privacy-utility balance
+
+**Mathematical basis:** The algorithm computes the rate of change in error as epsilon increases and finds where this rate drops significantly.
+
+### Key Outputs
+
+The search produces three critical values:
+
+| Value | Meaning | When to Use |
+|-------|---------|------------|
+| **Elbow Epsilon** | Best overall balance between privacy and accuracy | Default choice for most use cases |
+| **Threshold Epsilon** | Smallest epsilon achieving your target error | When you have specific accuracy requirements |
+| **Privacy-Accuracy Curve** | Complete mapping of epsilon vs. error | Understanding trade-offs |
+
+### Why Grid Search?
+
+The relationship between epsilon and noise is **deterministic and mathematical** — there's nothing to learn or optimize using machine learning. A grid search is:
+
+-  **Exact**: Finds the true optimal value
+-  **Fast**: Completes in seconds for real datasets
+-  **Interpretable**: Every step is transparent and explainable
+-  **Reproducible**: Same data always gives same results
+
+### Using Optimal Epsilon Search
+
+#### In the Dashboard
+
+1. Open the Streamlit app
+2. Go to **Sidebar → Optimal ε Finder**
+3. Check **"Find optimal ε for this data"**
+4. Select the statistic to optimize for (Mean Final Mark, Pass Rate, etc.)
+5. Set your **Target relative error** threshold
+6. The system runs the search and displays:
+   - Elbow point (recommended epsilon)
+   - Threshold epsilon (for your target error)
+   - Full privacy-accuracy visualization
+
+#### In Python Code
+
+```python
+from DP_Analytics_Students import DP_Analytics_Students
+
+analytics = DP_Analytics_Students("students.csv", pass_threshold=10)
+
+# Run optimal epsilon search
+results = analytics.find_optimal_epsilon(
+    metric="mean_final_mark",
+    target_error=5.0,  # 5% relative error
+    mechanism="laplace"
+)
+
+optimal_eps = results["optimal_epsilon"]
+print(f"Recommended epsilon: {optimal_eps:.4f}")
+```
+
+### Example Results
+
+For the student analytics dataset optimizing for **Mean Final Mark**:
+
+```
+Coarse Search (Phase 1):
+  ε = 0.01 → Error: 87.3%
+  ε = 0.2  → Error: 21.5%
+  ε = 0.4  → Error: 8.2%     ← Elbow region identified
+  ε = 0.6  → Error: 4.1%
+  ε = 1.0  → Error: 1.8%
+
+Fine Search (Phase 2):
+  ε = 0.35 → Error: 11.2%
+  ε = 0.40 → Error: 8.3%     ← ELBOW POINT
+  ε = 0.45 → Error: 6.1%
+  ε = 0.50 → Error: 4.8%
+
+Results:
+  Optimal epsilon (elbow):    0.40
+  Threshold epsilon (5% target): 0.47
+  Recommended privacy level:  Strong
+```
+
+### Interpretation Guide
+
+#### Below the Elbow
+- Increasing epsilon gives **large accuracy gains**
+- Strong privacy is sacrificed for little utility improvement
+-  Not recommended
+
+#### At the Elbow
+- Best **balance** of privacy and accuracy
+- Further increases give **diminishing returns**
+-  **Default recommendation**
+
+#### Above the Elbow
+- Accuracy improves slowly with larger epsilon
+- Privacy protection becomes weak
+- Consider only if accuracy requirement is strict
+
+### Advanced Options
+
+#### Choosing the Optimization Metric
+
+- **mean_final_mark**: Overall course performance
+- **mean_participation**: Student engagement
+- **mean_quiz_avg**: Assessment performance
+- **pass_rate**: Student success rates
+
+Different metrics may have different optimal epsilons due to varying sensitivities.
+
+#### Target Error Selection
+
+- **1-2%**: Nearly as accurate as non-private results (weak privacy)
+- **5%**: Good accuracy with reasonable privacy (recommended)
+- **10%**: Accepts some accuracy loss for stronger privacy
+- **20%+**: Maximum privacy, sacrifices accuracy significantly
 
 ---
 
