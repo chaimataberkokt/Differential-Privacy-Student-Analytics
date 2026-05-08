@@ -12,7 +12,7 @@ from DP_Analytics_Students import DP_Analytics_Students, PrivacyBudget
 
 st.set_page_config(
     page_title="DP Student Analytics",
-    page_icon="🔒",
+    page_icon="DP",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -24,7 +24,7 @@ st.markdown("---")
 # SIDEBAR CONTROLS
 
 
-st.sidebar.header("⚙️ Privacy Controls")
+st.sidebar.header("Privacy Controls")
 
 epsilon = st.sidebar.slider(
     "Privacy Budget (ε)",
@@ -55,16 +55,16 @@ st.sidebar.markdown(
     **Privacy vs Accuracy guide:**
     | ε | Privacy | Noise |
     |---|---|---|
-    | 0.01 – 0.10 | 🔓 Maximum | Very high |
-    | 0.10 – 0.20 | 🔒 Strong | High |
-    | 0.20 – 0.50 | ⚖️ Balanced | Moderate |
-    | 0.50 – 1.00 | 🎯 Weaker | Low |
-    | 1.00 – 2.00 | ⚠️ Weak | Very low |
+    | 0.01 – 0.10 | Maximum | Very high |
+    | 0.10 – 0.20 | Strong | High |
+    | 0.20 – 0.50 | Balanced | Moderate |
+    | 0.50 – 1.00 | Weaker | Low |
+    | 1.00 – 2.00 | Weak | Very low |
     """
 )
 
 st.sidebar.markdown("---")
-st.sidebar.header("🔍 Optimal ε Finder")
+st.sidebar.header("Optimal ε Finder")
 
 find_optimal = st.sidebar.checkbox(
     "Find optimal ε for this data",
@@ -146,7 +146,7 @@ with col4:
 st.markdown("---")
 
 # Dataset preview
-with st.expander("🔍 View Raw Data", expanded=False):
+with st.expander("View Raw Data", expanded=False):
     st.subheader("First 10 Rows of Processed Dataset")
     st.dataframe(
         df[["id", "final_mark", "participation_avg", "quiz_avg", "passed"]].head(10),
@@ -380,7 +380,7 @@ st.markdown("---")
 
 
 if find_optimal:
-    st.header("🔍 Optimal ε Finder")
+    st.header("Optimal ε Finder")
 
     with st.spinner("Running two-phase grid search (this may take a few seconds)..."):
         opt_result = analytics.find_optimal_epsilon(
@@ -400,20 +400,20 @@ if find_optimal:
 
     with rcol1:
         st.metric(
-            label="🎯 Optimal ε (Elbow)",
+            label="Optimal ε (Elbow)",
             value=f"{opt_eps:.4f}",
             help="The elbow point where further increases in ε give diminishing accuracy gains.",
         )
     with rcol2:
         if thr_eps is not None:
             st.metric(
-                label=f"✅ ε for ≤{target_error}% error",
+                label=f"ε for ≤{target_error}% error",
                 value=f"{thr_eps:.4f}",
                 help=f"Smallest ε that achieves ≤{target_error}% average relative error.",
             )
         else:
             st.metric(
-                label=f"❌ ε for ≤{target_error}% error",
+                label=f"ε for ≤{target_error}% error (N/A)",
                 value="Not achievable",
                 help="No tested ε achieved the target. Try raising the target or the slider max.",
             )
@@ -421,7 +421,7 @@ if find_optimal:
         # find the error at optimal eps
         opt_err = min(sweep, key=lambda d: abs(d["epsilon"] - opt_eps))["avg_relative_error"]
         st.metric(
-            label="📊 Error at optimal ε",
+            label="Error at optimal ε",
             value=f"{opt_err:.2f}%",
             help="Average relative error at the recommended elbow epsilon.",
         )
@@ -505,27 +505,27 @@ st.header(" Key Insights")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("🔐 Privacy-Accuracy Trade-off")
+    st.subheader("Privacy-Accuracy Trade-off")
 
     if epsilon <= 0.10:
-        privacy_level  = "🔓 **VERY STRONG PRIVACY**"
-        accuracy_level = "📉 Very High Noise"
+        privacy_level  = "**VERY STRONG PRIVACY**"
+        accuracy_level = "Very High Noise"
         explanation = "Maximum privacy protection, but results are heavily distorted by noise."
     elif epsilon <= 0.20:
-        privacy_level  = "🔒 **STRONG PRIVACY**"
-        accuracy_level = "📊 Moderate Noise"
+        privacy_level  = "**STRONG PRIVACY**"
+        accuracy_level = "Moderate Noise"
         explanation = "Good privacy with some accuracy loss. Suitable for highly sensitive data."
     elif epsilon <= 0.50:
-        privacy_level  = "⚖️ **BALANCED**"
-        accuracy_level = "📈 Low-Moderate Noise"
+        privacy_level  = "**BALANCED**"
+        accuracy_level = "Low-Moderate Noise"
         explanation = "Good balance between privacy and utility. Recommended for most use cases."
     elif epsilon <= 1.00:
-        privacy_level  = "🎯 **WEAKER PRIVACY**"
-        accuracy_level = "✅ Low Noise"
+        privacy_level  = "**WEAKER PRIVACY**"
+        accuracy_level = "Low Noise"
         explanation = "Highly accurate but privacy guarantees are weaker."
     else:
-        privacy_level  = "⚠️ **WEAK PRIVACY**"
-        accuracy_level = "🎯 Minimal Noise"
+        privacy_level  = "**WEAK PRIVACY**"
+        accuracy_level = "Minimal Noise"
         explanation = "Near-true results with very limited privacy protection."
 
     st.write(f"ε = **{epsilon}**")
@@ -534,7 +534,7 @@ with col1:
     st.write(f"**Interpretation:** {explanation}")
 
 with col2:
-    st.subheader("📊 Current Results Summary")
+    st.subheader("Current Results Summary")
     
     avg_abs_error = trial_df["Absolute Error"].mean()
     avg_rel_error = trial_df["Relative Error %"].mean()
@@ -545,15 +545,15 @@ with col2:
     st.write(f"**Avg Relative Error:** {avg_rel_error:.2f}%")
     
     if avg_rel_error < 5:
-        st.success(" Results are highly accurate!")
+        st.success("Results are highly accurate.")
     elif avg_rel_error < 15:
-        st.info("⚠️ Results are reasonably accurate with some noise.")
+        st.info("Results are reasonably accurate with some noise.")
     else:
-        st.warning("⚠️ Results show significant noise. Consider increasing epsilon.")
+        st.warning("Results show significant noise. Consider increasing epsilon.")
 
 st.markdown("---")
 
-st.subheader("🎓 How Differential Privacy Works")
+st.subheader("How Differential Privacy Works")
 
 with st.expander("Learn More", expanded=False):
     st.markdown("""
@@ -596,7 +596,7 @@ st.markdown("---")
 # Footer
 st.markdown("""
 <div style='text-align: center; color: #888; padding: 20px;'>
-    <p>🔒 Differential Privacy Student Analytics Dashboard</p>
+    <p>Differential Privacy Student Analytics Dashboard</p>
     <p><small>Built with Streamlit | Backend: DP_Analytics_Students.py</small></p>
 </div>
 """, unsafe_allow_html=True)
